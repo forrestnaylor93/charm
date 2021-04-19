@@ -1,6 +1,7 @@
 import {round} from './round.mjs';
 import {Frame} from './plane_modules/frame.js';
 import {Point, Origin} from './plane_modules/point.js';
+import {Gridline} from './plane_modules/gridline.js';
 
 //let frame = new Frame()
 
@@ -27,7 +28,7 @@ class Plane{
         this.step = {
             x_major: 1,
             x_minor: null,
-            y_major: 0,
+            y_major: 1,
             y_minor: null
         }
 
@@ -35,6 +36,7 @@ class Plane{
 
         this.pallete = {
             white: "white",
+            translucent_white: "rgba(255,255,255,0.5)",
             orange: "orange",
             lightblue: "lightblue",
             purple: "purple"
@@ -42,8 +44,8 @@ class Plane{
 
         this.colors = {
             frame: this.pallete.white,
-            major_gridlines: this.white,
-            minor_gridlines: this.white,
+            major_gridlines: this.pallete.translucent_white,
+            minor_gridlines: this.pallete.white,
             origin: this.pallete.purple,
             point: this.pallete.orange,
             line: this.pallete.lightblue
@@ -52,6 +54,7 @@ class Plane{
 
         this.sizes = {
             frameLineWidth: 5,
+            gridLineWidth: 2,
             point_radius: 5,
             origin_radius: 7,
         }
@@ -84,7 +87,17 @@ class Plane{
         }
 
         this.calculate_m();
+        
+        
+        
+        this.grid = {
+            major:{vertical:[], horizontal:[]},
+            minor:{vertical:[], horizontal:[]}
+        }
 
+        this.create_grid();
+
+       
         this.points = []
 
         let point = new Point(2, 1, 5, 'limegreen');
@@ -93,8 +106,6 @@ class Plane{
 
         this.points.push(point);
         this.points.push(point2);
-        console.log(this.origin)
-
         for(let i = 0; i < 10; i++){
             let x_pos = Math.random()*10-5;
             let y_pos = Math.random()*10-5;
@@ -179,6 +190,7 @@ class Plane{
     update = ()=>{
         this.zoom_update();
         this.calculate_m();
+        this.grid_update();
     }
 
         calculate_m = ()=>{
@@ -238,13 +250,59 @@ class Plane{
 
             
               
-            //this.origin.offset.x_px += 
+        }
 
-            console.log(this.zoom.velocity);
+        grid_update = ()=>{
+            
+            // vertical
+                    // add extra vertical grids to end if needed
+                    let vertical_grid_farthest_right_position = this.grid.major.vertical[this.grid.major.vertical.length-1].position;
+                    let vertical_grid_farthest_left_position = this.grid.major.vertical[0].position;
+                    if(this.m.x_max - vertical_grid_farthest_right_position > this.step.x_major){
+                        let new_gridline = new Gridline('vertical', vertical_grid_farthest_right_position + this.step.x_major);
+                        this.grid.major.vertical.push(new_gridline)
+                    }
+                    if(vertical_grid_farthest_left_position - this.m.x_min > this.step.x_major){
+                        let new_gridline = new Gridline('vertical', vertical_grid_farthest_left_position - this.step.x_major);
+                        this.grid.major.vertical.unshift(new_gridline);
+                    }
+
+                    // get rid of extra grids if they don't fit within x_min and x_max
+                    if(vertical_grid_farthest_right_position > this.m.x_max){
+                        this.grid.major.vertical.pop();
+                    }
+                    if(vertical_grid_farthest_left_position < this.m.x_min){
+                        this.grid.major.vertical.shift();
+                    }
+            // horizontal
+                    // add extra horizontal grids if needed to end of this. gird.major.horizontal
+                    let horizontal_grid_highest_position = this.grid.major.horizontal[this.grid.major.horizontal.length-1].position;
+                    let horizontal_grid_lowest_position = this.grid.major.horizontal[0].position;
+
+                    if(this.m.y_max - horizontal_grid_highest_position > this.step.y_major){
+                        let new_gridline = new Gridline('horizontal', horizontal_grid_highest_position + this.step.y_major);
+                        this.grid.major.horizontal.push(new_gridline);
+                    }
+                    if(horizontal_grid_lowest_position - this.m.y_min > this.step.y_major){
+                        let new_gridline = new Gridline('horizontal', horizontal_grid_lowest_position - this.step.y_major);
+                        this.grid.major.horizontal.unshift(new_gridline);
+                    }
+
+                    // get rid of extra grids if they don't within y_min and y_max
+                    if(horizontal_grid_highest_position > this.m.y_max){
+                        this.grid.major.horizontal.pop();
+                    }
+                    if(horizontal_grid_lowest_position < this.m.y_min){
+                        this.grid.major.horizontal.shift();
+                    }
         }
 
     draw = ()=>{
         this.update() // update all
+
+
+        // draw grid lines
+        this.draw_major_grid();
         this.frame.draw();
 
         // draw points from points list
@@ -269,6 +327,80 @@ class Plane{
                     this.ctx.ellipse(x_pos_in_px , y_pos_in_px, point.size, point.size, 0, 0, Math.PI*2);
                     this.ctx.fill();
                 }
+            
+            draw_major_grid = ()=>{
+                this.grid.major.vertical.forEach((gridline)=>{
+                    this.draw_gridline(gridline);  
+                })
+
+                this.grid.major.horizontal.forEach((gridline)=>{
+                    this.draw_gridline(gridline)
+                })
+            }
+
+                draw_gridline = (gridline)=>{
+                    if(gridline.type == 'vertical'){
+                        let x_pos = this.convert_unitX_to_px(gridline.position);
+                        this.ctx.lineWidth = this.sizes.gridLineWidth;
+                        this.ctx.strokeStyle = this.colors.major_gridlines;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x_pos, this.y1);
+                        this.ctx.lineTo(x_pos, this.y2);
+                        this.ctx.stroke();
+
+
+                    }
+                    if(gridline.type == 'horizontal'){
+                        let y_pos = this.convert_unitY_to_px(gridline.position);
+                        this.ctx.lineWidth = this.sizes.gridLineWidth;
+                        this.ctx.strokeStyle = this.colors.major_gridlines;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(this.x1, y_pos);
+                        this.ctx.lineTo(this.x2, y_pos);
+                        this.ctx.stroke();
+                    }
+                }
+
+    create_grid = ()=>{
+        let horizontal_visual_center_with_offset = this.x1 + this.width/2 + this.origin.offset.x_px;
+
+        // make positive value vertical grids
+        for(let x = this.step.x_major; x < this.m.x_max; x += this.step.x_major){
+            x = round(x);
+            let gridline = new Gridline('vertical', x);
+            this.grid.major.vertical.push(gridline);
+          //  console.log('new grid at ', x);
+        }
+
+        // make negative value vertical grids
+        for(let x = -this.step.x_major; x > this.m.x_min; x -= this.step.x_major){
+            x = round(x);
+            let gridline = new Gridline('vertical', x);
+            this.grid.major.vertical.push(gridline);
+            //console.log('new grid at ', x);
+        }
+
+        // make positive value for horizontal grids
+        for(let y = this.step.y_major; y < this.m.y_max; y += this.step.y_major){
+            console.log('new grid at ', y);
+            y = round(y);
+            let gridline = new Gridline('horizontal', y);
+            this.grid.major.horizontal.push(gridline);
+        }
+
+        // make negative value for horizontal grids
+        for(let y = -this.step.y_major; y > this.m.y_min; y -= this.step.y_major){
+            console.log('new grid at ', y);
+            y = round(y);
+            let gridline = new Gridline('horizontal', y);
+            this.grid.major.horizontal.push(gridline);
+        }
+
+        // sorts grids
+        this.grid.major.vertical.sort((a, b) => a.position - b.position);
+        this.grid.major.horizontal.sort((a, b) => a.position - b.position);
+        console.log(this.grid.major.horizontal)
+    }
 
     add_all_listeners = ()=>{
         this.mousemove.forEach((listener)=>{

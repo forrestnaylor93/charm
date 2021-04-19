@@ -9,7 +9,7 @@ resizeCanvasToDisplaySize(canvas);
 
 //let frame = new Frame(ctx);
 //frame.draw();
-let plane = new Plane(ctx, 0, 0, 500, 500);
+let plane = new Plane(ctx, 200, 200, 700, 700);
 
 //plane.frame.draw();
 
