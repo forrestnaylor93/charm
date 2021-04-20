@@ -5,4 +5,11 @@ class Gridline{
     }
 }
 
-export {Gridline};
+class Axis extends Gridline{
+    constructor(type, position = 0){
+        super(type, position)
+        this.label = '';
+    }
+}
+
+export {Gridline, Axis};

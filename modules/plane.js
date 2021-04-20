@@ -1,7 +1,7 @@
 import {round} from './round.mjs';
 import {Frame} from './plane_modules/frame.js';
 import {Point, Origin} from './plane_modules/point.js';
-import {Gridline} from './plane_modules/gridline.js';
+import {Axis, Gridline} from './plane_modules/gridline.js';
 
 //let frame = new Frame()
 
@@ -17,6 +17,8 @@ class Plane{
 
         this.width = this.x2 - this.x1;
         this.height = this.y2 - this.y1;
+
+        this.is_wheel_moving = false;
 
         this.unit = {
             x_px: 50,
@@ -39,7 +41,8 @@ class Plane{
             translucent_white: "rgba(255,255,255,0.5)",
             orange: "orange",
             lightblue: "lightblue",
-            purple: "purple"
+            purple: "purple",
+            pink: "pink"
         }
 
         this.colors = {
@@ -48,13 +51,16 @@ class Plane{
             minor_gridlines: this.pallete.white,
             origin: this.pallete.purple,
             point: this.pallete.orange,
-            line: this.pallete.lightblue
+            line: this.pallete.lightblue,
+            y_axis: this.pallete.pink,
+            x_axis: this.pallete.pink
 
         }
 
         this.sizes = {
             frameLineWidth: 5,
             gridLineWidth: 2,
+            axisLineWidth: 5,
             point_radius: 5,
             origin_radius: 7,
         }
@@ -95,6 +101,9 @@ class Plane{
             minor:{vertical:[], horizontal:[]}
         }
 
+        this.y_axis = new Axis('vertical', 0);
+        this.x_axis = new Axis('horizontal', 0);
+
         this.create_grid();
 
        
@@ -120,6 +129,7 @@ class Plane{
         this.mousemove = [this.mm_update_mouse_object];
         this.keydown = [this.kd_zoom_out, this.kd_zoom_in];
         this.keyup = [this.ku_zoom_brake];
+        this.wheel = [this.wh_zoom_out];
     
 
         this.listeners = []
@@ -303,6 +313,10 @@ class Plane{
 
         // draw grid lines
         this.draw_major_grid();
+
+        // draw axes
+        this.draw_axis(this.y_axis);
+        this.draw_axis(this.x_axis);
         this.frame.draw();
 
         // draw points from points list
@@ -319,6 +333,7 @@ class Plane{
                 })
             }
                 draw_point = (point)=>{
+                    if(point.x > this.m.x_max || point.x < this.m.x_min || point.y > this.m.y_max || point.y < this.m.y_min){return}// don't draw poitns outside of frame
                     let x_pos_in_px = this.convert_unitX_to_px(point.x);
                     let y_pos_in_px = this.convert_unitY_to_px(point.y);
 
@@ -337,6 +352,33 @@ class Plane{
                     this.draw_gridline(gridline)
                 })
             }
+
+                draw_axis = (axis)=>{
+
+                    if(axis.type == 'vertical'){
+                        if(axis.position < this.m.x_min || axis.position > this.m.x_max){return} // don't draw axis if it goes out of frame
+                        let x_pos = this.convert_unitX_to_px(axis.position);
+                        this.ctx.lineWidth = this.sizes.axisLineWidth;
+                        this.ctx.strokeStyle = this.colors.y_axis;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x_pos, this.y1);
+                        this.ctx.lineTo(x_pos, this.y2);
+                        this.ctx.stroke();
+
+
+                    }
+                    if(axis.type == 'horizontal'){
+                        if(axis.position < this.m.y_min || axis.position > this.m.y_max){return} // don't draw axis if it goes out of frame
+
+                        let y_pos = this.convert_unitY_to_px(axis.position);
+                        this.ctx.lineWidth = this.sizes.axisLineWidth;
+                        this.ctx.strokeStyle = this.colors.x_axis;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(this.x1, y_pos);
+                        this.ctx.lineTo(this.x2, y_pos);
+                        this.ctx.stroke();
+                    }
+                }
 
                 draw_gridline = (gridline)=>{
                     if(gridline.type == 'vertical'){
@@ -365,7 +407,7 @@ class Plane{
         let horizontal_visual_center_with_offset = this.x1 + this.width/2 + this.origin.offset.x_px;
 
         // make positive value vertical grids
-        for(let x = this.step.x_major; x < this.m.x_max; x += this.step.x_major){
+        for(let x = 0; x < this.m.x_max; x += this.step.x_major){
             x = round(x);
             let gridline = new Gridline('vertical', x);
             this.grid.major.vertical.push(gridline);
@@ -381,7 +423,7 @@ class Plane{
         }
 
         // make positive value for horizontal grids
-        for(let y = this.step.y_major; y < this.m.y_max; y += this.step.y_major){
+        for(let y = 0; y < this.m.y_max; y += this.step.y_major){
             console.log('new grid at ', y);
             y = round(y);
             let gridline = new Gridline('horizontal', y);
@@ -402,6 +444,7 @@ class Plane{
         console.log(this.grid.major.horizontal)
     }
 
+    
     add_all_listeners = ()=>{
         this.mousemove.forEach((listener)=>{
             this.add_mousemove_listener(listener);
@@ -413,6 +456,10 @@ class Plane{
 
         this.keyup.forEach((listener)=>{
             this.add_keyup_listener(listener);
+        })
+
+        this.wheel.forEach((listener)=>{
+            this.add_wheel_listener(listener);
         })
     }
 
@@ -426,6 +473,10 @@ class Plane{
 
         add_keyup_listener = (listener = ()=>{console.log('key up listener')})=>{
             this.canvas.addEventListener('keyup', listener)
+        }
+
+        add_wheel_listener = (listener = ()=> {console.log('wheel listener')}) =>{
+            this.canvas.addEventListener('wheel', listener)
         }
 
         // listeners
@@ -468,6 +519,43 @@ class Plane{
                     this.zoom.is_braking = true;
                     console.log('zoom braking')
                 }
+            }
+
+            wh_zoom_out = (e)=>{
+                
+                clearTimeout(this.is_wheel_moving)
+                if(e.deltaY < 0){
+                    console.log('zoom in')
+                    this.zoom.velocity -= .5;      
+                }
+                if(e.deltaY > 0){
+                    console.log('zoom out')
+                    this.zoom.velocity += .5;  
+                }
+                if(this.zoom.velocity > 5){
+                    this.zoom.velocity = 5;
+                }
+                if(this.zoom.velocity < -5){
+                    this.zoom.velocity = -5
+                }
+                this.is_wheel_moving = setTimeout(()=>{this.zoom.is_braking = true }, 200);
+                
+            //     let zoom_ratio = 1 - .01*this.zoom.velocity*15;
+            //        // adjust origin.offset.x_px
+            //        let x_dist_px_to_mouse_before = this.mouse.x.unit * this.unit.x_px; 
+            //        let x_dist_px_to_mouse_after = x_dist_px_to_mouse_before * zoom_ratio;
+            //        let change_in_x_px = x_dist_px_to_mouse_after - x_dist_px_to_mouse_before;
+            //        this.origin.offset.x_px -= change_in_x_px;
+               
+            //    // adjust origin.offset.y_px
+            //    let y_dist_px_to_mouse_before = this.mouse.y.unit * this.unit.y_px; 
+            //    let y_dist_px_to_mouse_after = y_dist_px_to_mouse_before * zoom_ratio;
+            //    let change_in_y_px = y_dist_px_to_mouse_after - y_dist_px_to_mouse_before;
+            //    this.origin.offset.y_px += change_in_y_px;
+               
+            //    this.unit.x_px *= zoom_ratio
+            //    this.unit.y_px *= zoom_ratio
+            //    this.zoom.velocity = 0;
             }
 }
 
