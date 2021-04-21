@@ -4,6 +4,7 @@ class Point{
         this.y = y;
         this.size = size;
         this.color = color;
+        this.is_mouse_on = false;
     }
 
 }

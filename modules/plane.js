@@ -42,7 +42,9 @@ class Plane{
             orange: "orange",
             lightblue: "lightblue",
             purple: "purple",
-            pink: "pink"
+            pink: "pink",
+            fuchsia: "fuchsia",
+            selected_shadow: 'rgba(255,255,0,0.7)'
         }
 
         this.colors = {
@@ -51,6 +53,7 @@ class Plane{
             minor_gridlines: this.pallete.white,
             origin: this.pallete.purple,
             point: this.pallete.orange,
+            point_selected: this.pallete.selected_shadow,
             line: this.pallete.lightblue,
             y_axis: this.pallete.pink,
             x_axis: this.pallete.pink
@@ -61,7 +64,9 @@ class Plane{
             frameLineWidth: 5,
             gridLineWidth: 2,
             axisLineWidth: 5,
-            point_radius: 5,
+            point_radius: 7,
+            point_magnification: 2, // how much larger point radius should be when magnified
+            point_selected_shadow_radius: 5, // how many pixels larger should a point selected 'highlight radius be
             origin_radius: 7,
         }
 
@@ -94,8 +99,8 @@ class Plane{
 
         this.pan = {
             velocity: {x: 0, y: 0}, // x - positive right, negative left; y - positive up, negative down
-            max_speed: 10,
-            acceleration: 1,
+            max_speed: 20,
+            acceleration: 1.5,
             is_braking: false
         }
 
@@ -116,25 +121,27 @@ class Plane{
        
         this.points = []
 
-        let point = new Point(2, 1, 5, 'limegreen');
-        let point2 = new Point(-3, -4, 5, 'limegreen');
+        //let point = new Point(2, 1, 5, 'limegreen');
+       // let point2 = new Point(-3, -4, 5, 'limegreen');
         
 
-        this.points.push(point);
-        this.points.push(point2);
-        for(let i = 0; i < 10; i++){
+        //this.points.push(point);
+        //this.points.push(point2);
+        for(let i = 0; i < 5; i++){
             let x_pos = Math.random()*10-5;
             let y_pos = Math.random()*10-5;
 
-            let point = new Point(x_pos, y_pos, 5, 'limegreen');
+            let point = new Point(x_pos, y_pos, this.sizes.point_radius, 'limegreen');
             this.points.push(point);
 
         }
 
         // interactivity
+        
 
-        this.mousemove = [this.mm_update_mouse_object];
-        this.keydown = [this.kd_zoom_out, this.kd_zoom_in, this.kd_pan];
+        this.mousedown = [this.md_select_object]
+        this.mousemove = [this.mm_update_mouse_object, this.mm_is_mouse_on_object];
+        this.keydown = [this.kd_zoom_out, this.kd_zoom_in, this.kd_pan, this.kd_center_origin];
         this.keyup = [this.ku_zoom_brake, this.ku_pan];
         this.wheel = [this.wh_zoom_out];
     
@@ -142,6 +149,15 @@ class Plane{
         this.listeners = []
 
         this.add_all_listeners();
+        // this.canvas.addEventListener('mousedown', ()=>{
+        //     this.points.forEach((point)=>{
+        //         if(point.is_mouse_on){
+        //             point.is_selected = true;
+        //             point.color = 'red';
+        //             console.log('clicking on point')
+        //         }
+        //     })
+        // })
 
         
     }
@@ -350,10 +366,21 @@ class Plane{
                     if(point.x > this.m.x_max || point.x < this.m.x_min || point.y > this.m.y_max || point.y < this.m.y_min){return}// don't draw poitns outside of frame
                     let x_pos_in_px = this.convert_unitX_to_px(point.x);
                     let y_pos_in_px = this.convert_unitY_to_px(point.y);
+                    let draw_size = point.size;
+                    if(point.is_mouse_on){
+                        draw_size *= this.sizes.point_magnification;
+                    }
+                    
+                    if(point.is_selected){
+                        this.ctx.fillStyle = this.colors.point_selected;
+                        this.ctx.beginPath();
+                        this.ctx.ellipse(x_pos_in_px , y_pos_in_px, draw_size+this.sizes.point_selected_shadow_radius, draw_size+this.sizes.point_selected_shadow_radius, 0, 0, Math.PI*2);
+                        this.ctx.fill();
+                    }
 
                     this.ctx.fillStyle = point.color;
                     this.ctx.beginPath();
-                    this.ctx.ellipse(x_pos_in_px , y_pos_in_px, point.size, point.size, 0, 0, Math.PI*2);
+                    this.ctx.ellipse(x_pos_in_px , y_pos_in_px, draw_size, draw_size, 0, 0, Math.PI*2);
                     this.ctx.fill();
                 }
             
@@ -472,7 +499,16 @@ class Plane{
         this.wheel.forEach((listener)=>{
             this.add_wheel_listener(listener);
         })
+
+        this.mousedown.forEach((listener)=>{
+            this.add_mousedown_listener(listener);
+        })
     }
+
+
+        add_mousedown_listener = (listener = ()=>{console.log('mousedown listener')})=>{
+            this.canvas.addEventListener('mousedown', listener)
+        }
 
         add_mousemove_listener = (listener = ()=>{console.log('mouse move listener')})=>{
             this.canvas.addEventListener('mousemove', listener)
@@ -500,6 +536,20 @@ class Plane{
                 this.mouse.y.px = e.clientY;
                 this.mouse.y.unit = this.convert_pxY_to_unit(this.mouse.y.px);
             }
+
+            mm_is_mouse_on_object = (e)=>{
+                this.points.forEach((point)=>{
+                    let x_diff = Math.abs(this.mouse.x.px - this.convert_unitX_to_px(point.x))
+                    let y_diff = Math.abs(this.mouse.y.px - this.convert_unitY_to_px(point.y))
+                    if(x_diff < point.size && y_diff < point.size){
+                        point.is_mouse_on = true;
+                    }else{
+                        point.is_mouse_on = false;
+                    }
+                })
+            }
+
+
 
             kd_zoom_out = (e)=>{
                 if(e.key == 'q'){
@@ -537,25 +587,32 @@ class Plane{
                 switch(e.key){
                     case 'd':
                         this.pan.velocity.x -= this.pan.acceleration;
-                        if(this.pan.velocity.x < -10){this.pan.velocity.x = -10}
+                        if(this.pan.velocity.x < -this.pan.max_speed){this.pan.velocity.x = -this.pan.max_speed}
                         console.log('pan left', this.pan.velocity.x)
                     break;
                     case 'a':
                         this.pan.velocity.x += this.pan.acceleration;
-                        if(this.pan.velocity.x > 10){this.pan.velocity.x = 10}
+                        if(this.pan.velocity.x > this.pan.max_speed){this.pan.velocity.x = this.pan.max_speed}
                     break;
                     case 's':
                         this.pan.velocity.y += this.pan.acceleration;
-                        if(this.pan.velocity.y > 10){this.pan.velocity.y = 10}
+                        if(this.pan.velocity.y > this.pan.max_speed){this.pan.velocity.y = this.pan.max_speed}
                     break;
                     case 'w':
                         this.pan.velocity.y -= this.pan.acceleration;
-                        if(this.pan.velocity.y < -10){this.pan.velocity.y = -10}
+                        if(this.pan.velocity.y < -this.pan.max_speed){this.pan.velocity.y = -this.pan.max_speed}
                     break;
                     default:
                 }
                 if(e.key == 'a'){
                     
+                }
+            }
+
+            kd_center_origin = (e)=>{
+                if(e.key == '0'){
+                    this.origin.offset.x_px = 0;
+                    this.origin.offset.y_px = 0;
                 }
             }
 
@@ -610,6 +667,22 @@ class Plane{
             //    this.unit.x_px *= zoom_ratio
             //    this.unit.y_px *= zoom_ratio
             //    this.zoom.velocity = 0;
+            }
+
+            md_select_object = (e)=>{
+                console.log('hmmm')
+                this.points.forEach((point)=>{
+                    if(point.is_mouse_on){
+                        if(!point.is_selected){
+                            point.is_selected = true;
+                        }
+                        else{
+                            point.is_selected = false;
+                        }
+                        
+                       
+                    }
+                })
             }
 }
 
