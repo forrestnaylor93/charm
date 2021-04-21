@@ -92,6 +92,13 @@ class Plane{
             is_braking: false
         }
 
+        this.pan = {
+            velocity: {x: 0, y: 0}, // x - positive right, negative left; y - positive up, negative down
+            max_speed: 10,
+            acceleration: 1,
+            is_braking: false
+        }
+
         this.calculate_m();
         
         
@@ -127,8 +134,8 @@ class Plane{
         // interactivity
 
         this.mousemove = [this.mm_update_mouse_object];
-        this.keydown = [this.kd_zoom_out, this.kd_zoom_in];
-        this.keyup = [this.ku_zoom_brake];
+        this.keydown = [this.kd_zoom_out, this.kd_zoom_in, this.kd_pan];
+        this.keyup = [this.ku_zoom_brake, this.ku_pan];
         this.wheel = [this.wh_zoom_out];
     
 
@@ -201,6 +208,7 @@ class Plane{
         this.zoom_update();
         this.calculate_m();
         this.grid_update();
+        this.pan_update();
     }
 
         calculate_m = ()=>{
@@ -260,6 +268,12 @@ class Plane{
 
             
               
+        }
+
+        pan_update = ()=>{
+            //horizontal
+            this.origin.offset.x_px += this.pan.velocity.x;
+            this.origin.offset.y_px -= this.pan.velocity.y;
         }
 
         grid_update = ()=>{
@@ -424,7 +438,6 @@ class Plane{
 
         // make positive value for horizontal grids
         for(let y = 0; y < this.m.y_max; y += this.step.y_major){
-            console.log('new grid at ', y);
             y = round(y);
             let gridline = new Gridline('horizontal', y);
             this.grid.major.horizontal.push(gridline);
@@ -432,7 +445,6 @@ class Plane{
 
         // make negative value for horizontal grids
         for(let y = -this.step.y_major; y > this.m.y_min; y -= this.step.y_major){
-            console.log('new grid at ', y);
             y = round(y);
             let gridline = new Gridline('horizontal', y);
             this.grid.major.horizontal.push(gridline);
@@ -441,7 +453,6 @@ class Plane{
         // sorts grids
         this.grid.major.vertical.sort((a, b) => a.position - b.position);
         this.grid.major.horizontal.sort((a, b) => a.position - b.position);
-        console.log(this.grid.major.horizontal)
     }
 
     
@@ -521,15 +532,58 @@ class Plane{
                 }
             }
 
+            kd_pan = (e)=>{
+
+                switch(e.key){
+                    case 'd':
+                        this.pan.velocity.x -= this.pan.acceleration;
+                        if(this.pan.velocity.x < -10){this.pan.velocity.x = -10}
+                        console.log('pan left', this.pan.velocity.x)
+                    break;
+                    case 'a':
+                        this.pan.velocity.x += this.pan.acceleration;
+                        if(this.pan.velocity.x > 10){this.pan.velocity.x = 10}
+                    break;
+                    case 's':
+                        this.pan.velocity.y += this.pan.acceleration;
+                        if(this.pan.velocity.y > 10){this.pan.velocity.y = 10}
+                    break;
+                    case 'w':
+                        this.pan.velocity.y -= this.pan.acceleration;
+                        if(this.pan.velocity.y < -10){this.pan.velocity.y = -10}
+                    break;
+                    default:
+                }
+                if(e.key == 'a'){
+                    
+                }
+            }
+
+            ku_pan = (e)=>{
+                switch(e.key){
+                    case 'a':
+                        this.pan.velocity.x = 0
+                    break;
+                    case 'd':
+                        this.pan.velocity.x = 0
+                    break;
+                    case 'w':
+                        this.pan.velocity.y = 0
+                    break;
+                    case 's':
+                        this.pan.velocity.y = 0
+                    break;
+                    default:   
+                }
+            }
+
             wh_zoom_out = (e)=>{
                 
                 clearTimeout(this.is_wheel_moving)
                 if(e.deltaY < 0){
-                    console.log('zoom in')
                     this.zoom.velocity -= .5;      
                 }
                 if(e.deltaY > 0){
-                    console.log('zoom out')
                     this.zoom.velocity += .5;  
                 }
                 if(this.zoom.velocity > 5){
